@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>SpaceNexus – Commercial Space Booking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html,body,#root{height:100%}
+      body{background:#07090f;font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;color:#f1f5f9}
+      ::-webkit-scrollbar{width:5px;height:5px}
+      ::-webkit-scrollbar-track{background:#0c0f1a}
+      ::-webkit-scrollbar-thumb{background:#1e2538;border-radius:4px}
+      input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.5);cursor:pointer}
+      button,input,select,textarea{font-family:'DM Sans',sans-serif}
+      @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes slideIn{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+      @keyframes scaleIn{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:scale(1)}}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+      @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    </style>
+  </head>
+  <body><div id="root"></div></body>
+</html>
