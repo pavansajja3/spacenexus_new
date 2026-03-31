@@ -33,21 +33,12 @@ export default function BlueprintPage({ space, units, setUnits, role, user, addB
     setImgLoading(true);
     api.spaces.getFloorImages(space.id)
       .then(data => {
-        if (data?.floor_images) {
-          const imgs = typeof data.floor_images === 'string'
-            ? JSON.parse(data.floor_images)
-            : data.floor_images;
-          // Normalize all keys to both string and number
-          const normalized = {};
-          Object.entries(imgs).forEach(([k, v]) => {
-            normalized[k]          = v;  // "1"
-            normalized[Number(k)]  = v;  // 1
-          });
-          setFloorImgs(normalized);
+        if (data?.floor_images && typeof data.floor_images === 'object') {
+          setFloorImgs(data.floor_images);
         }
       })
-      .catch(err => {
-        console.error('Floor image load error:', err);
+      .catch(() => {
+        // Old backend without floor_images column — silently ignore
       })
       .finally(() => setImgLoading(false));
   }, [space?.id]);
@@ -78,8 +69,8 @@ export default function BlueprintPage({ space, units, setUnits, role, user, addB
     notify(`Uploading Floor ${floor} plan...`);
     try {
       const base64 = await compressImage(file);
-      // Show immediately to admin — store with both key types
-      setFloorImgs(p => ({ ...p, [floor]: base64, [String(floor)]: base64 }));
+      // Show immediately to admin
+      setFloorImgs(p => ({ ...p, [floor]: base64 }));
       setFloorImgNames(p => ({ ...p, [floor]: file.name }));
       // Save to DB so tenants see it too
       await api.spaces.saveFloorImage(space.id, floor, base64);
@@ -130,8 +121,7 @@ export default function BlueprintPage({ space, units, setUnits, role, user, addB
     st  : <Badge status={u.status} />,
   }));
 
-  // Check floor key as number, string, and also re-fetch if missing
-  const currentImg = floorImgs[floor] || floorImgs[String(floor)] || floorImgs[Number(floor)] || null;
+  const currentImg = floorImgs[floor] || floorImgs[String(floor)] || null;
 
   return (
     <div>
@@ -255,7 +245,7 @@ export default function BlueprintPage({ space, units, setUnits, role, user, addB
         /* ── Mall Map — shown to ALL roles once image exists in DB ── */
         !imgLoading && (
           <MallMap
-            units={filtered}
+            units={floorUnits}
             floor={floor}
             role={role}
             img={currentImg}

@@ -28,20 +28,19 @@ function sha512(str) {
 
 // PayU hash formula (initiate):
 // key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
-function makeHash(p) {
+function makeHash(params) {
   const str = [
-    String(PAYU_KEY).trim(),
-    String(p.txnid).trim(),
-    String(p.amount).trim(),
-    String(p.productinfo).trim(),
-    String(p.firstname).trim(),
-    String(p.email).trim(),
-    String(p.udf1||''), String(p.udf2||''), String(p.udf3||''),
-    String(p.udf4||''), String(p.udf5||''),
-    '','','','','',
-    String(PAYU_SALT).trim(),
+    PAYU_KEY,
+    params.txnid,
+    params.amount,
+    params.productinfo,
+    params.firstname,
+    params.email,
+    params.udf1 || '', params.udf2 || '', params.udf3 || '',
+    params.udf4 || '', params.udf5 || '',
+    '', '', '', '', '',
+    PAYU_SALT,
   ].join('|');
-  console.log('PayU hash input:', str);
   return sha512(str);
 }
 
@@ -99,22 +98,15 @@ router.post('/initiate', authenticate, async (req, res) => {
       [txnid, bookingId]
     );
 
-    // Sanitize — strip pipe chars that would break hash
-    const sanitize = s => String(s||'').replace(/[|]/g, '-').trim();
-    const productinfo = sanitize(`SpaceNexus Unit ${booking.unit_number} - ${booking.space_name}`);
-    const firstname   = sanitize(booking.name.split(' ')[0] || 'Tenant');
-    const email       = sanitize(booking.email);
-
     const params = {
       key        : PAYU_KEY,
       txnid,
-      amount     : Number(booking.total).toFixed(2),
-      productinfo,
-      firstname,
-      email,
-      phone      : (booking.phone||'9999999999').replace(/\D/g,'').slice(0,10)||'9999999999',
-      udf1       : String(bookingId),
-      udf2       : '', udf3: '', udf4: '', udf5: '',
+      amount     : booking.total.toFixed(2),
+      productinfo: `SpaceNexus Unit ${booking.unit_number} - ${booking.space_name}`,
+      firstname  : booking.name.split(' ')[0],
+      email      : booking.email,
+      phone      : booking.phone || '9999999999',
+      udf1       : String(bookingId),   // store bookingId for callback
       surl       : `${APP_URL}/api/payments/success`,
       furl       : `${APP_URL}/api/payments/failure`,
     };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { C, rupee } from '../theme';
 import { PageHeader, Badge, Card, Btn, SearchBar } from '../components/UI';
-import PayUCheckout, { PaymentSuccessModal, PaymentFailedModal, downloadReceipt, downloadLease } from '../components/PayUCheckout';
+import PayUCheckout, { PaymentSuccessModal, PaymentFailedModal, downloadReceipt } from '../components/PayUCheckout';
 
 const FILTERS = ['all','pending','approved','rejected','cancelled'];
 
@@ -232,7 +232,7 @@ export default function Bookings({ bookings, setBookings, role, user, spaces, no
                         <Btn size="sm" variant="ghost" onClick={() => downloadReceipt(b, user)}>
                           📄 Receipt
                         </Btn>
-                        <Btn size="sm" variant="ghost" onClick={() => downloadLease(b, user)}>📋 Lease</Btn>
+                        <Btn size="sm" variant="ghost">📋 Lease</Btn>
                       </>
                     )}
                   </div>
