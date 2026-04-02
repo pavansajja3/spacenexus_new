@@ -18,10 +18,13 @@ async function req(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   const t = token.get();
   if (t) headers['Authorization'] = `Bearer ${t}`;
-  const res  = await fetch(`${BASE}${path}`, {
-    method, headers,
+
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -40,6 +43,7 @@ const api = {
     update  : (data)            => patch('/auth/me', data),
     password: (cur, next)       => patch('/auth/password', { currentPassword: cur, newPassword: next }),
   },
+
   spaces: {
     getAll : ()      => get('/spaces'),
     getOne : (id)    => get(`/spaces/${id}`),
@@ -48,18 +52,40 @@ const api = {
     approve: (id)    => patch(`/spaces/${id}/approve`),
     reject : (id)    => patch(`/spaces/${id}/reject`),
     delete : (id)    => del(`/spaces/${id}`),
-    getFloorImages : (id)            => get(`/spaces/${id}/floors`),
-    saveFloorImage : (id, floor, image) => req('PATCH', `/spaces/${id}/floor-image`, { floor, image }),
+
+    getFloorImages: (id) => get(`/spaces/${id}/floors`),
+
+    uploadFloorImage: async (spaceId, floor, file) => {
+      const formData = new FormData();
+      formData.append('floor', floor);
+      formData.append('image', file);
+
+      const t = token.get();
+
+      const res = await fetch(`${BASE}/spaces/${spaceId}/floor-image`, {
+        method: 'PATCH',
+        headers: {
+          ...(t ? { Authorization: `Bearer ${t}` } : {}),
+        },
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    },
   },
+
   units: {
-    getAll : (p) => get(`/units${p ? '?'+new URLSearchParams(p) : ''}`),
+    getAll : (p) => get(`/units${p ? '?' + new URLSearchParams(p) : ''}`),
     getOne : (id)    => get(`/units/${id}`),
     create : (data)  => post('/units', data),
     update : (id, d) => patch(`/units/${id}`, d),
     delete : (id)    => del(`/units/${id}`),
   },
+
   bookings: {
-    getAll : (p) => get(`/bookings${p ? '?'+new URLSearchParams(p) : ''}`),
+    getAll : (p) => get(`/bookings${p ? '?' + new URLSearchParams(p) : ''}`),
     getOne : (id)    => get(`/bookings/${id}`),
     create : (data)  => post('/bookings', data),
     approve: (id)    => patch(`/bookings/${id}/approve`),
@@ -67,16 +93,18 @@ const api = {
     cancel : (id)    => patch(`/bookings/${id}/cancel`),
     pay    : (id)    => patch(`/bookings/${id}/pay`),
   },
+
   analytics: {
     dashboard: () => get('/analytics/dashboard'),
   },
+
   payments: {
     initiate : (bookingId) => post('/payments/initiate', { bookingId }),
     status   : (bookingId) => get(`/payments/status/${bookingId}`),
   },
 
   users: {
-    getAll   : (p) => get(`/users${p ? '?'+new URLSearchParams(p) : ''}`),
+    getAll   : (p) => get(`/users${p ? '?' + new URLSearchParams(p) : ''}`),
     setStatus: (id, status) => patch(`/users/${id}/status`, { status }),
   },
 };

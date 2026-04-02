@@ -1,8 +1,34 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { authenticate, authorize } = require('../middleware/auth');
 
 router.use(authenticate);
+
+// uploads folder
+const uploadDir = path.resolve(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const floor = req.body.floor || 'x';
+    const ext = path.extname(file.originalname) || '.png';
+    cb(null, `space_${req.params.id}_floor_${floor}_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // GET all spaces
 router.get('/', async (req, res) => {
@@ -38,7 +64,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET single space
+// GET one space
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -54,9 +80,7 @@ router.get('/:id', async (req, res) => {
     const space = rows[0];
     if (!space) return res.status(404).json({ error: 'Space not found' });
 
-    if (req.user.role === 'super_owner') {
-      return res.json(space);
-    }
+    if (req.user.role === 'super_owner') return res.json(space);
 
     if (req.user.role === 'admin') {
       if (space.admin_id !== req.user.id) {
@@ -84,7 +108,7 @@ router.get('/:id/floors', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `
-      SELECT id, admin_id, status, owner_approved, floor_images
+      SELECT id, admin_id, status, owner_approved, floor_images, floors
       FROM spaces
       WHERE id = $1
       `,
@@ -105,57 +129,80 @@ router.get('/:id/floors', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({ floor_images: space.floor_images || {} });
+    res.json({
+      floors: space.floors,
+      floor_images: space.floor_images || {},
+    });
   } catch (err) {
     console.error('GET /api/spaces/:id/floors error:', err);
     res.status(500).json({ error: 'Failed to fetch floor images' });
   }
 });
 
-// PATCH floor image
-router.patch('/:id/floor-image', authorize('super_owner', 'admin'), async (req, res) => {
-  const { floor, image } = req.body;
+// UPLOAD one separate image per floor
+router.patch(
+  '/:id/floor-image',
+  authorize('super_owner', 'admin'),
+  upload.single('image'),
+  async (req, res) => {
+    const { floor } = req.body;
 
-  if (!floor || !image) {
-    return res.status(400).json({ error: 'floor and image are required' });
-  }
-
-  try {
-    const existing = await pool.query(
-      `
-      SELECT id, admin_id, floor_images
-      FROM spaces
-      WHERE id = $1
-      `,
-      [req.params.id]
-    );
-
-    const space = existing.rows[0];
-    if (!space) return res.status(404).json({ error: 'Space not found' });
-
-    if (req.user.role === 'admin' && space.admin_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!floor || !req.file) {
+      return res.status(400).json({ error: 'floor and image file are required' });
     }
 
-    const current = space.floor_images || {};
-    const updated = { ...current, [String(floor)]: image };
+    try {
+      const existing = await pool.query(
+        `
+        SELECT id, admin_id, floor_images, floors
+        FROM spaces
+        WHERE id = $1
+        `,
+        [req.params.id]
+      );
 
-    const { rows } = await pool.query(
-      `
-      UPDATE spaces
-      SET floor_images = $1
-      WHERE id = $2
-      RETURNING id, floor_images
-      `,
-      [JSON.stringify(updated), req.params.id]
-    );
+      const space = existing.rows[0];
+      if (!space) return res.status(404).json({ error: 'Space not found' });
 
-    res.json({ floor_images: rows[0].floor_images });
-  } catch (err) {
-    console.error('PATCH /api/spaces/:id/floor-image error:', err);
-    res.status(500).json({ error: 'Failed to save floor image' });
+      if (req.user.role === 'admin' && space.admin_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const floorNum = Number(floor);
+      if (!floorNum || floorNum < 1 || floorNum > Number(space.floors || 1)) {
+        return res.status(400).json({ error: 'Invalid floor number' });
+      }
+
+      const current = space.floor_images || {};
+      const publicPath = `/uploads/${req.file.filename}`;
+
+      const updated = {
+        ...current,
+        [String(floorNum)]: publicPath,
+      };
+
+      const { rows } = await pool.query(
+        `
+        UPDATE spaces
+        SET floor_images = $1
+        WHERE id = $2
+        RETURNING id, floor_images
+        `,
+        [JSON.stringify(updated), req.params.id]
+      );
+
+      res.json({
+        message: `Floor ${floorNum} image uploaded successfully`,
+        floor: floorNum,
+        file: publicPath,
+        floor_images: rows[0].floor_images,
+      });
+    } catch (err) {
+      console.error('PATCH /api/spaces/:id/floor-image error:', err);
+      res.status(500).json({ error: 'Failed to upload floor image' });
+    }
   }
-});
+);
 
 // CREATE space
 router.post('/', authorize('super_owner', 'admin'), async (req, res) => {
@@ -173,8 +220,8 @@ router.post('/', authorize('super_owner', 'admin'), async (req, res) => {
     const { rows } = await pool.query(
       `
       INSERT INTO spaces
-      (name, type, location, floors, area, status, owner_approved, admin_id, blueprint_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (name, type, location, floors, area, status, owner_approved, admin_id, blueprint_url, floor_images)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '{}'::jsonb)
       RETURNING *
       `,
       [
@@ -243,7 +290,7 @@ router.patch('/:id', authorize('super_owner', 'admin'), async (req, res) => {
   }
 });
 
-// APPROVE space
+// APPROVE
 router.patch('/:id/approve', authorize('super_owner'), async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -269,7 +316,7 @@ router.patch('/:id/approve', authorize('super_owner'), async (req, res) => {
   }
 });
 
-// REJECT space
+// REJECT
 router.patch('/:id/reject', authorize('super_owner'), async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -295,7 +342,7 @@ router.patch('/:id/reject', authorize('super_owner'), async (req, res) => {
   }
 });
 
-// DELETE space
+// DELETE
 router.delete('/:id', authorize('super_owner'), async (req, res) => {
   try {
     const existing = await pool.query(
